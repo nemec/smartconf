@@ -49,7 +49,11 @@ namespace SmartConf
                 var priValue = pi.GetGetMethod().Invoke(primary, null);
                 var secValue = pi.GetGetMethod().Invoke(secondary, null);
                 var defaultValue = typeof(T).GetProperty(pi.Name).GetGetMethod().Invoke(defaultObject, null);
-                if (!priValue.Equals(secValue) && !secValue.Equals(defaultValue))
+
+                if (priValue == null && secValue != null ||
+                    (priValue != null && !priValue.Equals(secValue) &&
+                        (secValue != defaultValue ||
+                            secValue != null && !secValue.Equals(defaultValue))))
                 {
                     pi.GetSetMethod().Invoke(primary, new object[] { secValue });
                 }
