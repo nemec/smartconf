@@ -1,7 +1,9 @@
 ﻿
-Microsoft Visual Studio Solution File, Format Version 11.00
-# Visual Studio 2010
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2012
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SmartConf", "SmartConf\SmartConf.csproj", "{756A8F35-77CD-4BCF-896C-3FE9A3C215F8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SmartConf.Examples", "SmartConf.Examples\SmartConf.Examples.csproj", "{684C4168-EACA-4939-BC0B-4C6E266A7F25}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -13,6 +15,10 @@ Global
 		{756A8F35-77CD-4BCF-896C-3FE9A3C215F8}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{756A8F35-77CD-4BCF-896C-3FE9A3C215F8}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{756A8F35-77CD-4BCF-896C-3FE9A3C215F8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{684C4168-EACA-4939-BC0B-4C6E266A7F25}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{684C4168-EACA-4939-BC0B-4C6E266A7F25}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{684C4168-EACA-4939-BC0B-4C6E266A7F25}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{684C4168-EACA-4939-BC0B-4C6E266A7F25}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
