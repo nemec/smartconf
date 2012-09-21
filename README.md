@@ -96,6 +96,15 @@ Test code:
 	//> Name: Tim The Enchanter
 	//> Age: 20
 
+TODO
+====
+
+* Find a way to let command-line parsing libraries (like
+	[commandline](http://commandline.codeplex.com/)) overwrite values in the configuration
+	without counting them as "changed" when writing to a file.
+* Provide custom serialization hooks (IXmlSerializable? ISerializable? Serialization method isn't
+	critical to change-tracking).
+
 Notes
 =====
 
