@@ -2,129 +2,153 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
-using System.Xml;
-using System.Xml.Serialization;
-using System.Data;
-using System.Xml.Linq;
-using System.Collections;
 using System.Reflection;
 
 namespace SmartConf
 {
-    public static class ConfigurationExtensions
-    {
-        /// <summary>
-        /// Merges all properties in the secondary object
-        /// with those in the primary.
-        /// 
-        /// A property value will be set only if the
-        /// value in <paramref name="secondary"/> is
-        /// different from the value in <paramref name="primary"/>
-        /// AND different from the default value (after construction).
-        /// 
-        /// Note: Dynamic default values (like DateTime.Now) may not
-        /// return the same default value for multiple invocations,
-        /// thus may not merge accurately.
-        /// </summary>
-        /// <typeparam name="T">
-        /// Type to merge. Must have a default constructor that
-        /// sets default property values.
-        /// </typeparam>
-        /// <param name="primary">Object to overwrite values for.</param>
-        /// <param name="secondary">
-        /// Object to merge into <paramref name="primary"/>.
-        /// </param>
-        public static void MergeWith<T>(this T primary, T secondary) where T : new()
-        {
-            // We need to know whether or not the value is new or from the constructor.
-            // Doesn't work on objects that don't implement IEquatable.
-            var defaultObject = new T();
-            if (secondary == null) return;
-            if (primary == null) primary = defaultObject;
-
-            foreach (var pi in typeof(T).GetProperties())
-            {
-                var priValue = pi.GetGetMethod().Invoke(primary, null);
-                var secValue = pi.GetGetMethod().Invoke(secondary, null);
-                var defaultValue = typeof(T).GetProperty(pi.Name).GetGetMethod().Invoke(defaultObject, null);
-
-                if (priValue == null && secValue != null ||
-                    (priValue != null && !priValue.Equals(secValue) &&
-                        (secValue != defaultValue ||
-                            secValue != null && !secValue.Equals(defaultValue))))
-                {
-                    pi.GetSetMethod().Invoke(primary, new object[] { secValue });
-                }
-            }
-        }
-    }
-
+    /// <summary>
+    /// A configuration manager that loads and merges settings from
+    /// multiple sources and intelligently tracks changes to the
+    /// resulting configuration object.
+    /// </summary>
+    /// <typeparam name="T">Strongly typed Configuration object</typeparam>
     public class ConfigurationManager<T> where T : class, new()
     {
+        /// <summary>
+        /// Whether or not change tracking is currently enabled.
+        /// </summary>
+        public bool ChangeTrackingEnabled { get; private set; }
+
         private string LocalFilepath { get; set; }
+
+        private IPartialSerializer<T> Serializer { get; set; }
 
         private T Base { get; set; }
 
         /// <summary>
         /// This object contains the merged configuration settings.
         /// It will track all changes and save them out to a file
-        /// when <see cref="SaveChanges"/> is called.
+        /// when <see ref="SaveChanges"/> is called.
         /// </summary>
-        public T Out { get; private set; }
+        public T Out { get; set; }
 
         /// <summary>
-        /// Create a new ConfigurationReader pulling in values from
-        /// the given <see cref="baseFilepath"/> and
-        /// <see cref="localFilepath"/>.
+        /// Create a ConfigurationManager with the default 
+        /// XmlPartialSerializer implementation.
         /// </summary>
-        /// <param name="baseFilepath">Main config file.</param>
-        /// <param name="localFilepath">Local overrides of configuration settings.</param>
-        public ConfigurationManager(string baseFilepath, string localFilepath)
+        public ConfigurationManager()
         {
-            var Serializer = new XmlSerializer(typeof(T));
+            Serializer = new XmlPartialSerializer<T>();
+        } 
+
+        /// <summary>
+        /// Create a ConfigurationManager with the given
+        /// IPartialSerializer.
+        /// </summary>
+        /// <param name="serializer"></param>
+        public ConfigurationManager(IPartialSerializer<T> serializer)
+        {
+            Serializer = serializer;
+        } 
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="localFilepath">
+        /// The path that configuration changes will be saved to.
+        /// Contents of this file will be loaded onto the config
+        /// object last.
+        /// </param>
+        /// <param name="baseFilepaths">
+        /// Variable number of configuration files to load settings
+        /// from before loading the local file. Files will be loaded
+        /// in order and any non-default values will overwrite those
+        /// of previous configuration files.
+        /// 
+        /// The configuration state once all base files have been loaded
+        /// will be used as the "default" state for the config.
+        /// </param>
+        public void Load(string localFilepath, params string[] baseFilepaths)
+        {
             LocalFilepath = localFilepath;
-
-            if (baseFilepath != null)
+            FileStream localStream = null;
+            Stream[] baseStreams = null;
+            try
             {
-                using (var reader = new FileStream(baseFilepath, FileMode.Open, FileAccess.Read, FileShare.Read))
+                localStream = new FileStream(localFilepath, FileMode.Open, FileAccess.Read, FileShare.Read);
+                baseStreams = baseFilepaths.Select(b =>
+                    (Stream)new FileStream(b, FileMode.Open, FileAccess.Read, FileShare.Read))
+                    .ToArray();
+                Load(localStream, baseStreams.ToArray());
+            }
+            finally{
+                if (localStream != null)
                 {
-                    Base = (T)Serializer.Deserialize(reader);  // Keep the original around for diffing
-                    reader.Seek(0, SeekOrigin.Begin);
-                    Out = (T)Serializer.Deserialize(reader);
+                    localStream.Dispose();
                 }
-            }
-            else
-            {
-                Base = new T();
-                Out = new T();
-            }
-
-            if (localFilepath != null)
-            {
-                using (var reader = new FileStream(localFilepath, FileMode.Open, FileAccess.Read, FileShare.Read))
+                if (baseStreams != null)
                 {
-                    Out.MergeWith((T)Serializer.Deserialize(reader));
+                    foreach (var baseStream in baseStreams)
+                    {
+                        baseStream.Dispose();
+                    }
                 }
             }
         }
 
-        public Dictionary<string, object> GetPropertyChangesByName()
+        private void Load(Stream localStream, params Stream[] baseStreams)
         {
-            return GetProperties(PropertyStatus.Changed).ToDictionary(
-                k => k.Name,
-                v => v.GetGetMethod().Invoke(Out, null));
+            Base = new T();
+            Out = new T();
+            foreach (var stream in baseStreams)
+            {
+                Base.MergeWith(Serializer.Deserialize(stream)); // Keep the original around for diffing
+                stream.Seek(0, SeekOrigin.Begin);
+                Out.MergeWith(Serializer.Deserialize(stream));
+            }
+
+            if (localStream != null)
+            {
+                Out.MergeWith(Serializer.Deserialize(localStream));
+            }
+
+            EnableChangeTracking();
+        }
+
+        /// <summary>
+        /// Temporarily disables change tracking.
+        /// </summary>
+        public void DisableChangeTracking()
+        {
+            if (!ChangeTrackingEnabled) return;
+
+            throw new NotImplementedException();
+        }
+
+        /// <summary>
+        /// Enables change tracking after it has
+        /// been disabled.
+        /// </summary>
+        public void EnableChangeTracking()
+        {
+            if (ChangeTrackingEnabled) return;
+
+            ChangeTrackingEnabled = true;
         }
 
         /// <summary>
         /// Saves changes to <see cref="Out"/> to the
         /// local file path passed in the constructor.
+        /// 
+        /// <exception cref="InvalidOperationException">
+        /// Thrown if no output file path is known.
+        /// </exception>
         /// </summary>
         public void SaveChanges()
         {
             if (LocalFilepath == null)
             {
-                throw new ArgumentNullException(
+                throw new InvalidOperationException(
                     "LocalFilepath cannot be null when saving changes to default location.");
             }
             SaveChanges(LocalFilepath);
@@ -133,41 +157,42 @@ namespace SmartConf
         /// <summary>
         /// Saves changes to <see cref="Out"/> to the
         /// file path provided as an argument.
+        /// 
+        /// If there is no known
         /// </summary>
         /// <param name="outputFilepath"></param>
         public void SaveChanges(string outputFilepath)
         {
             if (outputFilepath == null)
             {
-                throw new ArgumentNullException("Output filepath cannot be null.");
+                throw new ArgumentNullException("outputFilepath", "Output filepath cannot be null.");
             }
-            var overrides = GetIgnoredProperties();
-            var Serializer = new XmlSerializer(typeof(T), overrides);
             
-            using (TextWriter writer = new StreamWriter(outputFilepath))
+            using (var writer = new FileStream(outputFilepath, FileMode.Create))
             {
-                
-                Serializer.Serialize(writer, Out);
+                SaveChanges(writer);
             }
         }
 
         /// <summary>
-        /// Ignores all properties where the current value
-        /// equals the default value.
+        /// Saves modified properties to the given stream.
         /// </summary>
-        /// <param name="obj"></param>
-        /// <param name="def"></param>
-        /// <returns></returns>
-        private XmlAttributeOverrides GetIgnoredProperties()
+        /// <param name="outputStream"></param>
+        public void SaveChanges(Stream outputStream)
         {
-            var attributeOverrides = new XmlAttributeOverrides();
+            Serializer.Serialize(outputStream, Out);
+        }
 
-            foreach(var info in GetProperties(PropertyStatus.Unchanged)){
-                attributeOverrides.Add(
-                    typeof(T), info.Name, new XmlAttributes { XmlIgnore = true });
-            }
-            
-            return attributeOverrides;
+        /// <summary>
+        /// Retrieves the names of all properties that
+        /// have been changed since loading.
+        /// </summary>
+        /// <returns></returns>
+        public Dictionary<string, object> GetPropertyChangesByName()
+        {
+            return GetProperties(PropertyStatus.Changed).ToDictionary(
+                k => k.Name,
+                v => v.GetGetMethod().Invoke(Out, null));
         }
 
         private enum PropertyStatus

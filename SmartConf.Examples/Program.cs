@@ -1,7 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 
 namespace SmartConf.Examples
 {
@@ -46,7 +44,7 @@ namespace SmartConf.Examples
                 Console.WriteLine("Changed Properties:");
                 foreach (var prop in props)
                 {
-                    Console.WriteLine(String.Format("  {0}: {1}", prop.Key, prop.Value));
+                    Console.WriteLine("  {0}: {1}", prop.Key, prop.Value);
                 }
             }
             else
@@ -56,9 +54,10 @@ namespace SmartConf.Examples
             Console.WriteLine();
         }
 
-        static void Main(string[] args)
+        static void Main()
         {
-            var config = new ConfigurationManager<Config>("settings.xml", "local.xml");
+            var config = new ConfigurationManager<Config>();
+            config.Load("local.xml", "settings.xml");
             PrintChangedProperties(config);
 
             ManageMyConfigFile(config.Out);
@@ -67,9 +66,10 @@ namespace SmartConf.Examples
             Console.WriteLine("Check out.xml in the bin directory for the 'new' local config file.");
             config.SaveChanges("out.xml");
 
-            var savedConf = new ConfigurationManager<Config>("settings.xml", "out.xml");
+            var savedConfig = new ConfigurationManager<Config>();
+            savedConfig.Load("out.xml", "settings.xml");
             Console.WriteLine("After loading and merging 'out.xml':");
-            PrintChangedProperties(config);
+            Console.WriteLine(savedConfig.Out);
         }
     }
 }

@@ -4,3 +4,7 @@ obj
 
 # mstest test results
 TestResults
+packages/
+*.suo
+*.user
+*.nupkg
