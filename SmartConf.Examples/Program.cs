@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Linq;
+using SmartConf.XmlConfiguration;
 
 namespace SmartConf.Examples
 {
@@ -56,18 +57,16 @@ namespace SmartConf.Examples
 
         static void Main()
         {
-            var config = new ConfigurationManager<Config>();
-            config.Load("local.xml", "settings.xml");
+            var config = new ConfigurationManager<Config>("settings.xml", "local.xml");
             PrintChangedProperties(config);
 
             ManageMyConfigFile(config.Out);
             PrintChangedProperties(config);
 
             Console.WriteLine("Check out.xml in the bin directory for the 'new' local config file.");
-            config.SaveChanges("out.xml");
+            config.SaveChanges(new XmlConfigurationSource<Config>("out.xml"));
 
-            var savedConfig = new ConfigurationManager<Config>();
-            savedConfig.Load("out.xml", "settings.xml");
+            var savedConfig = new ConfigurationManager<Config>("settings.xml", "out.xml");
             Console.WriteLine("After loading and merging 'out.xml':");
             Console.WriteLine(savedConfig.Out);
         }

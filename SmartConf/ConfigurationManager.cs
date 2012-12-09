@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Reflection;
+using SmartConf.XmlConfiguration;
 
 namespace SmartConf
 {
@@ -19,11 +19,9 @@ namespace SmartConf
         /// </summary>
         public bool ChangeTrackingEnabled { get; private set; }
 
-        private string LocalFilepath { get; set; }
+        private IConfigurationSource<T>[] ConfigStack { get; set; }
 
-        private IPartialSerializer<T> Serializer { get; set; }
-
-        private T Base { get; set; }
+        private readonly IConfigurationSource<T> _primarySource;
 
         /// <summary>
         /// This object contains the merged configuration settings.
@@ -33,85 +31,42 @@ namespace SmartConf
         public T Out { get; set; }
 
         /// <summary>
-        /// Create a ConfigurationManager with the default 
-        /// XmlPartialSerializer implementation.
+        /// Create a ConfigurationManager loading its information
+        /// from a list of XML configuration files parsed by
+        /// <see cref="XmlConfigurationSource{T}"/> sources.
         /// </summary>
-        public ConfigurationManager()
+        /// <param name="configFiles">Filenames to load.</param>
+        public ConfigurationManager(params string[] configFiles)
+            : this(configFiles.Select(c =>
+                (IConfigurationSource<T>)new XmlConfigurationSource<T>(c))
+                .ToArray())
         {
-            Serializer = new XmlPartialSerializer<T>();
+            
         } 
 
         /// <summary>
-        /// Create a ConfigurationManager with the given
-        /// IPartialSerializer.
-        /// </summary>
-        /// <param name="serializer"></param>
-        public ConfigurationManager(IPartialSerializer<T> serializer)
-        {
-            Serializer = serializer;
-        } 
-
-        /// <summary>
+        /// Create a ConfigurationManager, loading its information
+        /// from an ordered list of sources.
         /// 
+        /// If no source is marked as a PrimarySource, the last
+        /// source in the sequence will be assumed to be primary.
         /// </summary>
-        /// <param name="localFilepath">
-        /// The path that configuration changes will be saved to.
-        /// Contents of this file will be loaded onto the config
-        /// object last.
-        /// </param>
-        /// <param name="baseFilepaths">
-        /// Variable number of configuration files to load settings
-        /// from before loading the local file. Files will be loaded
-        /// in order and any non-default values will overwrite those
-        /// of previous configuration files.
-        /// 
-        /// The configuration state once all base files have been loaded
-        /// will be used as the "default" state for the config.
-        /// </param>
-        public void Load(string localFilepath, params string[] baseFilepaths)
+        /// <exception cref="ArgumentException">
+        /// More than one source is marked as a PrimarySource.
+        /// </exception>
+        /// <param name="sources"></param>
+        public ConfigurationManager(params IConfigurationSource<T>[] sources)
         {
-            LocalFilepath = localFilepath;
-            FileStream localStream = null;
-            Stream[] baseStreams = null;
-            try
+            ConfigStack = sources;
+            var primarySources = sources.Where(s => s.PrimarySource);
+            if (primarySources.Count() > 1)
             {
-                localStream = new FileStream(localFilepath, FileMode.Open, FileAccess.Read, FileShare.Read);
-                baseStreams = baseFilepaths.Select(b =>
-                    (Stream)new FileStream(b, FileMode.Open, FileAccess.Read, FileShare.Read))
-                    .ToArray();
-                Load(localStream, baseStreams.ToArray());
+                throw new ArgumentException("Cannot have more than one primary source.");
             }
-            finally{
-                if (localStream != null)
-                {
-                    localStream.Dispose();
-                }
-                if (baseStreams != null)
-                {
-                    foreach (var baseStream in baseStreams)
-                    {
-                        baseStream.Dispose();
-                    }
-                }
-            }
-        }
-
-        private void Load(Stream localStream, params Stream[] baseStreams)
-        {
-            Base = new T();
-            Out = new T();
-            foreach (var stream in baseStreams)
-            {
-                Base.MergeWith(Serializer.Deserialize(stream)); // Keep the original around for diffing
-                stream.Seek(0, SeekOrigin.Begin);
-                Out.MergeWith(Serializer.Deserialize(stream));
-            }
-
-            if (localStream != null)
-            {
-                Out.MergeWith(Serializer.Deserialize(localStream));
-            }
-
+            _primarySource = primarySources.Any() ?
+                primarySources.First() :
+                sources.Last();
+            Out = sources.Select(s => s.Config).Merge();
             EnableChangeTracking();
         }
 
@@ -131,57 +86,32 @@ namespace SmartConf
         /// </summary>
         public void EnableChangeTracking()
         {
-            if (ChangeTrackingEnabled) return;
-
-            ChangeTrackingEnabled = true;
+            if (!ChangeTrackingEnabled)
+            {
+                ChangeTrackingEnabled = true;
+            }
         }
 
         /// <summary>
-        /// Saves changes to <see cref="Out"/> to the
-        /// local file path passed in the constructor.
-        /// 
-        /// <exception cref="InvalidOperationException">
-        /// Thrown if no output file path is known.
-        /// </exception>
+        /// Save changes to <see cref="Out"/> to
+        /// the PrimarySource.
         /// </summary>
         public void SaveChanges()
         {
-            if (LocalFilepath == null)
-            {
-                throw new InvalidOperationException(
-                    "LocalFilepath cannot be null when saving changes to default location.");
-            }
-            SaveChanges(LocalFilepath);
+            SaveChanges(_primarySource);
         }
 
         /// <summary>
         /// Saves changes to <see cref="Out"/> to the
-        /// file path provided as an argument.
-        /// 
-        /// If there is no known
+        /// given IConfigurationSource.
         /// </summary>
-        /// <param name="outputFilepath"></param>
-        public void SaveChanges(string outputFilepath)
+        /// <param name="source">Source to use as the primary source.</param>
+        public void SaveChanges(IConfigurationSource<T> source)
         {
-            if (outputFilepath == null)
-            {
-                throw new ArgumentNullException("outputFilepath", "Output filepath cannot be null.");
-            }
-            
-            using (var writer = new FileStream(outputFilepath, FileMode.Create))
-            {
-                SaveChanges(writer);
-            }
+            source.PartialSave(Out,
+                GetProperties(PropertyStatus.Changed).Select(p => p.Name));
         }
 
-        /// <summary>
-        /// Saves modified properties to the given stream.
-        /// </summary>
-        /// <param name="outputStream"></param>
-        public void SaveChanges(Stream outputStream)
-        {
-            Serializer.Serialize(outputStream, Out);
-        }
 
         /// <summary>
         /// Retrieves the names of all properties that
@@ -203,19 +133,21 @@ namespace SmartConf
 
         private IEnumerable<PropertyInfo> GetProperties(PropertyStatus status)
         {
+            var @base = ConfigStack
+                .Select(c => c.Config)
+                .Where(c => !ReferenceEquals(c, _primarySource.Config)).Merge();
             foreach (var info in typeof(T).GetProperties())
             {
                 var priValue = info.GetGetMethod().Invoke(Out, null);
-                var secValue = info.GetGetMethod().Invoke(Base, null);
+                var baseValue = info.GetGetMethod().Invoke(@base, null);
 
-                // True if changed, False if unchanged.
-                var actualStatus = (priValue == null || !priValue.Equals(secValue)) &&
-                    (priValue != null || secValue != null);
-                if (status == PropertyStatus.Changed && actualStatus)
+                var propertyChanged = (priValue == null || !priValue.Equals(baseValue)) &&
+                    (priValue != null || baseValue != null);
+                if (status == PropertyStatus.Changed && propertyChanged)
                 {
                     yield return info;
                 }
-                else if(status == PropertyStatus.Unchanged && !actualStatus)
+                else if(status == PropertyStatus.Unchanged && !propertyChanged)
                 {
                     yield return info;
                 }

@@ -24,9 +24,11 @@ This configuration manager allows you to load a "base" config file (containing s
 Features
 ========
 
-* Uses C#'s standard XML-object [serialization](http://msdn.microsoft.com/en-us/library/system.xml.serialization.xmlserializer.aspx),
+* By default, uses C#'s standard XML-object [serialization](http://msdn.microsoft.com/en-us/library/system.xml.serialization.xmlserializer.aspx),
     so defining a configuration class is no different than defining a standard class (but
     custom serialization attributes may be defined and used if more complex needs arise).
+* Custom IConfigurationSources may be defined to allow settings to be composed from
+    alternate sources like AppConfig and the command line.
 * Automatically detects changes using reflection. No need to explicitly mark a property as
     modified.
 * Default constructors can also be used to set values not overridden by the base or local
@@ -74,8 +76,7 @@ Test code:
         config.Age = 20;
     }
 
-    var configManager = new ConfigurationManager<Config>();
-    configManager.Load("LocalSettings.xml", "BaseSettings.xml");
+    var configManager = new ConfigurationManager<Config>("BaseSettings.xml", "LocalSettings.xml");
     Config config = configManager.Out;
 
     Console.WriteLine(config.Name);

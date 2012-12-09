@@ -1,4 +1,5 @@
-﻿using System.Reflection;
+﻿using System.Collections.Generic;
+using System.Reflection;
 
 namespace SmartConf
 {
@@ -34,11 +35,11 @@ namespace SmartConf
             if (Equals(secondary, null)) return;
             if (Equals(primary, null)) primary = defaultObject;
 
-            foreach (PropertyInfo pi in typeof (T).GetProperties())
+            foreach (var pi in typeof (T).GetProperties())
             {
-                object priValue = pi.GetGetMethod().Invoke(primary, null);
-                object secValue = pi.GetGetMethod().Invoke(secondary, null);
-                object defaultValue = typeof (T).GetProperty(pi.Name).GetGetMethod().Invoke(defaultObject, null);
+                var priValue = pi.GetGetMethod().Invoke(primary, null);
+                var secValue = pi.GetGetMethod().Invoke(secondary, null);
+                var defaultValue = typeof (T).GetProperty(pi.Name).GetGetMethod().Invoke(defaultObject, null);
 
                 if (priValue == null && secValue != null ||
                     (priValue != null && !priValue.Equals(secValue) &&
@@ -48,6 +49,35 @@ namespace SmartConf
                     pi.GetSetMethod().Invoke(primary, new[] {secValue});
                 }
             }
+        }
+
+        /// <summary>
+        /// Merge the properties of a list of objects
+        /// into a new object, in order.
+        /// </summary>
+        /// <typeparam name="T">Type of the result.</typeparam>
+        /// <param name="objects">Objects to compress.</param>
+        /// <returns>A single object containing the merged results.</returns>
+        public static T Merge<T>(this IEnumerable<T> objects) where T : new()
+        {
+            return objects.Merge(new T());
+        }
+
+        /// <summary>
+        /// Merge the properties of a list of objects
+        /// into a new object, in order.
+        /// </summary>
+        /// <typeparam name="T">Type of the result.</typeparam>
+        /// <param name="objects">Objects to compress.</param>
+        /// <param name="seed">Seed value used as the base of the merge.</param>
+        /// <returns>A single object containing the merged results.</returns>
+        public static T Merge<T>(this IEnumerable<T> objects, T seed) where T : new()
+        {
+            foreach (var o in objects)
+            {
+                seed.MergeWith(o);
+            }
+            return seed;
         }
     }
 }
