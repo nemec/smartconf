@@ -4,40 +4,32 @@ using System.IO;
 using System.Xml.Serialization;
 using System.Linq;
 
-namespace SmartConf.XmlConfiguration
+namespace SmartConf.Sources
 {
     /// <summary>
-    /// 
+    /// Load the configuration object from an XML stream.
+    /// This configuration source is read-only and cannot
+    /// be saved.
     /// </summary>
-    /// <typeparam name="T"></typeparam>
-    public class XmlConfigurationSource<T> : IConfigurationSource<T> where T : class
+    /// <typeparam name="T">Configuration object type to deserialize.</typeparam>
+    public class XmlStreamConfigurationSource<T> : IConfigurationSource<T> where T : class
     {
         private readonly XmlSerializer _serializer;
 
-        private string Filename { get; set; }
-
         public bool PrimarySource { get; set; }
 
-        /// <summary>
-        /// Load the configuration object from a file.
-        /// Filename is generated from some other source,
-        /// such as another IConfigurationSource.
-        /// </summary>
-        /// <param name="getFilename">Function to generate filename.</param>
-        public XmlConfigurationSource(Func<string> getFilename)
-            : this(getFilename())
-        {
-        }
+        private readonly Stream _sourceStream;
 
         /// <summary>
-        /// Load the configuration object from a file.
+        /// Load an XML configuration from the given stream.
         /// </summary>
-        /// <param name="filename">Filename to load.</param>
-        public XmlConfigurationSource(string filename)
+        /// <param name="stream">Stream to serialize.</param>
+        public XmlStreamConfigurationSource(Stream stream)
         {
-            Filename = filename;
+            _sourceStream = stream;
             _serializer = new XmlSerializer(typeof(T));
         }
+        
 
         private T _config;
 
@@ -47,14 +39,28 @@ namespace SmartConf.XmlConfiguration
             {
                 if (_config == null)
                 {
-                    using (var stream = new FileStream(
-                        Filename, FileMode.Open, FileAccess.Read, FileShare.Read))
+                    using (var stream = GetInputStream())
                     {
-                        _config = (T) _serializer.Deserialize(stream);
+                        _config = (T)_serializer.Deserialize(stream);
                     }
                 }
                 return _config;
             }
+        }
+
+        protected virtual Stream GetInputStream()
+        {
+            if (_sourceStream == null)
+            {
+                throw new ArgumentException("Input stream cannot be null.");
+            }
+            return _sourceStream;
+        }
+
+        protected virtual Stream GetOutputStream()
+        {
+            throw new InvalidOperationException(
+                "Cannot write to an XmlStreamConfigurationSource.");
         }
 
         public void Invalidate()
@@ -84,7 +90,7 @@ namespace SmartConf.XmlConfiguration
             }
 
             var serializer = new XmlSerializer(typeof(T), attributeOverrides);
-            using (var writer = new FileStream(Filename, FileMode.Create))
+            using (var writer = GetOutputStream())
             {
                 serializer.Serialize(writer, obj);
             }           

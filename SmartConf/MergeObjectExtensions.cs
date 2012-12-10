@@ -1,5 +1,5 @@
-﻿using System.Collections.Generic;
-using System.Reflection;
+﻿using System;
+using System.Collections.Generic;
 
 namespace SmartConf
 {
@@ -29,24 +29,46 @@ namespace SmartConf
         /// </param>
         public static void MergeWith<T>(this T primary, T secondary) where T : new()
         {
+            MergeWith(primary, secondary, new T());
+        }
+
+        /// <summary>
+        ///     Merges all properties in the secondary object
+        ///     with those in the primary.
+        ///     A property value will be set only if the
+        ///     value in <paramref name="secondary" /> is
+        ///     different from the value in <paramref name="primary" />
+        ///     AND different from the default value (after construction).
+        ///     Note: Dynamic default values (like DateTime.Now) may not
+        ///     return the same default value for multiple invocations,
+        ///     thus may not merge accurately.
+        /// </summary>
+        /// <typeparam name="T">
+        ///     Type to merge. Must have a default constructor that
+        ///     sets default property values.
+        /// </typeparam>
+        /// <param name="primary">Object to overwrite values for.</param>
+        /// <param name="secondary">
+        ///     Object to merge into <paramref name="primary" />.
+        /// </param>
+        /// <param name="defaultObject">
+        ///     Object used as the "reference" object for checking default values.
+        /// </param>
+        public static void MergeWith<T>(this T primary, T secondary, T defaultObject)
+        {
             // We need to know whether or not the value is new or from the constructor.
             // Doesn't work on objects that don't implement IEquatable.
-            var defaultObject = new T();
             if (Equals(secondary, null)) return;
-            if (Equals(primary, null)) primary = defaultObject;
+            if (Equals(primary, null)) throw new ArgumentNullException("primary");
 
-            foreach (var pi in typeof (T).GetProperties())
+            foreach (var pi in typeof(T).GetProperties())
             {
-                var priValue = pi.GetGetMethod().Invoke(primary, null);
                 var secValue = pi.GetGetMethod().Invoke(secondary, null);
-                var defaultValue = typeof (T).GetProperty(pi.Name).GetGetMethod().Invoke(defaultObject, null);
+                var defaultValue = pi.GetGetMethod().Invoke(defaultObject, null);
 
-                if (priValue == null && secValue != null ||
-                    (priValue != null && !priValue.Equals(secValue) &&
-                     (secValue != defaultValue ||
-                      secValue != null && !secValue.Equals(defaultValue))))
+                if (!Equals(secValue, defaultValue))
                 {
-                    pi.GetSetMethod().Invoke(primary, new[] {secValue});
+                    pi.GetSetMethod().Invoke(primary, new[] { secValue });
                 }
             }
         }

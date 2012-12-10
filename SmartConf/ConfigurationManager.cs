@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using SmartConf.XmlConfiguration;
+using SmartConf.Sources;
 
 namespace SmartConf
 {
@@ -23,6 +23,16 @@ namespace SmartConf
 
         private readonly IConfigurationSource<T> _primarySource;
 
+        private T Base
+        {
+            get
+            {
+                return ConfigStack
+                .Select(c => c.Config)
+                .Where(c => !ReferenceEquals(c, _primarySource.Config)).Merge();
+            }
+        }
+
         /// <summary>
         /// This object contains the merged configuration settings.
         /// It will track all changes and save them out to a file
@@ -33,15 +43,16 @@ namespace SmartConf
         /// <summary>
         /// Create a ConfigurationManager loading its information
         /// from a list of XML configuration files parsed by
-        /// <see cref="XmlConfigurationSource{T}"/> sources.
+        /// <see cref="XmlFileConfigurationSource{T}"/> sources.
+        /// Convenience method when only using XML files for storage.
+        /// The final file in the list will be used as the primary source.
         /// </summary>
         /// <param name="configFiles">Filenames to load.</param>
         public ConfigurationManager(params string[] configFiles)
             : this(configFiles.Select(c =>
-                (IConfigurationSource<T>)new XmlConfigurationSource<T>(c))
+                (IConfigurationSource<T>)new XmlFileConfigurationSource<T>(c))
                 .ToArray())
         {
-            
         } 
 
         /// <summary>
@@ -108,7 +119,10 @@ namespace SmartConf
         /// <param name="source">Source to use as the primary source.</param>
         public void SaveChanges(IConfigurationSource<T> source)
         {
-            source.PartialSave(Out,
+            var mrg = new T();
+            mrg.MergeWith(_primarySource.Config);
+            mrg.MergeWith(Out, Base);
+            source.PartialSave(mrg,
                 GetProperties(PropertyStatus.Changed).Select(p => p.Name));
         }
 
@@ -120,9 +134,23 @@ namespace SmartConf
         /// <returns></returns>
         public Dictionary<string, object> GetPropertyChangesByName()
         {
-            return GetProperties(PropertyStatus.Changed).ToDictionary(
-                k => k.Name,
-                v => v.GetGetMethod().Invoke(Out, null));
+            var primaryChanges = GetProperties(Base, _primarySource.Config, PropertyStatus.Changed)
+                .ToDictionary(
+                    k => k.Name,
+                    v => v.GetGetMethod().Invoke(_primarySource.Config, null));
+            var outChanges = GetProperties(Base, Out, PropertyStatus.Changed)
+                .ToDictionary(
+                    k => k.Name,
+                    v => v.GetGetMethod().Invoke(Out, null));
+
+            var finalChanges = new Dictionary<string, object>(primaryChanges);
+
+            foreach (var outChange in outChanges)
+            {
+                finalChanges[outChange.Key] = outChange.Value;
+            }
+
+            return finalChanges;
         }
 
         private enum PropertyStatus
@@ -133,16 +161,24 @@ namespace SmartConf
 
         private IEnumerable<PropertyInfo> GetProperties(PropertyStatus status)
         {
-            var @base = ConfigStack
-                .Select(c => c.Config)
-                .Where(c => !ReferenceEquals(c, _primarySource.Config)).Merge();
+            return GetProperties(
+                ConfigStack
+                    .Select(c => c.Config)
+                    .Where(c => !ReferenceEquals(c, _primarySource.Config)).Merge(),
+                Out, status);
+        } 
+
+        private static IEnumerable<PropertyInfo> GetProperties(T start, T end, PropertyStatus status)
+        {
+            var @default = new T();
             foreach (var info in typeof(T).GetProperties())
             {
-                var priValue = info.GetGetMethod().Invoke(Out, null);
-                var baseValue = info.GetGetMethod().Invoke(@base, null);
+                var priValue = info.GetGetMethod().Invoke(end, null);
+                var baseValue = info.GetGetMethod().Invoke(start, null);
+                var defaultValue = info.GetGetMethod().Invoke(@default, null);
 
-                var propertyChanged = (priValue == null || !priValue.Equals(baseValue)) &&
-                    (priValue != null || baseValue != null);
+                var propertyChanged = !Equals(priValue, baseValue) && 
+                    !Equals(priValue, defaultValue);
                 if (status == PropertyStatus.Changed && propertyChanged)
                 {
                     yield return info;

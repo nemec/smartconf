@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Linq;
-using SmartConf.XmlConfiguration;
+using SmartConf.Sources;
 
 namespace SmartConf.Examples
 {
@@ -33,6 +33,7 @@ namespace SmartConf.Examples
             Console.WriteLine(
                 "I'll track changes even in methods/classes that don't know about " +
                 "the ConfigurationManager, as long as the instance stays the same.");
+            Console.WriteLine("Changing age to 20.");
             config.Age = 20;
             Console.WriteLine(config);
         }
@@ -64,7 +65,7 @@ namespace SmartConf.Examples
             PrintChangedProperties(config);
 
             Console.WriteLine("Check out.xml in the bin directory for the 'new' local config file.");
-            config.SaveChanges(new XmlConfigurationSource<Config>("out.xml"));
+            config.SaveChanges(new XmlFileConfigurationSource<Config>("out.xml"));
 
             var savedConfig = new ConfigurationManager<Config>("settings.xml", "out.xml");
             Console.WriteLine("After loading and merging 'out.xml':");

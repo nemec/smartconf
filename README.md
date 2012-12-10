@@ -16,17 +16,15 @@ I recently ran into a number of compounding issues that prompted me to create th
     is readonly, but I need to be able to store a value back into the config file before my program
     closes (for example, to record the last time the application was run).
 
-This configuration manager allows you to load a "base" config file (containing settings you
-    may wish to store in version control) as well as a "local" file with data that is
-    specific to a given application instance (passwords, connection strings, and of course
-    anything written to the config object).
+This configuration manager allows multiple sources to be merged, in order, into a
+single, strongly typed configuration object that can be passed into a program.
+
 
 Features
 ========
 
 * By default, uses C#'s standard XML-object [serialization](http://msdn.microsoft.com/en-us/library/system.xml.serialization.xmlserializer.aspx),
-    so defining a configuration class is no different than defining a standard class (but
-    custom serialization attributes may be defined and used if more complex needs arise).
+    so defining a configuration class is no different than defining a standard class.
 * Custom IConfigurationSources may be defined to allow settings to be composed from
     alternate sources like AppConfig and the command line.
 * Automatically detects changes using reflection. No need to explicitly mark a property as
@@ -43,6 +41,9 @@ Features
     configuration manager is able to track changes to the object.
 * Since configuration objects are plain objects, you can define instance methods, custom
     getters/setters, and more.
+
+Existing Sources
+================
 
 Usage
 =====
@@ -103,9 +104,9 @@ Test code:
 TODO
 ====
 
-* Find a way to let command-line parsing libraries (like
-    [commandline](http://commandline.codeplex.com/)) overwrite values in the configuration
-    without counting them as "changed" when writing to a file.
+* Implement a way to disable tracking on-demand for short periods of time.
+* Implement a custom source for AppConfig/WebConfig files and the built-in
+  ConfigurationManager.
 
 Notes
 =====
@@ -119,11 +120,5 @@ Notes
     settings file as the manager detects the values are different. It is recommended to set
     properties to a constant value in the constructor and provide a separate initialization
     method that overwrites the constant (if not already overwritten).
-* Only *public properties* are tracked by the manager, due in part to limitations with the
-    XML serializer.
-* This may implement a similar architecture the built-in
-    [ApplicationSettingsBase](http://msdn.microsoft.com/en-us/library/8eyb2ct1.aspx).
-    More research is needed to see what features it offers, but after a cursory look it seems
-    ApplicationSettings scopes its settings to "system" and "user" while smartconf assumes
-    your base settings are applied globally (across multiple machines) and locally (specific
-    to one system).
+* Only *public properties* are tracked by the manager, due in part to limitations with
+  reflection.

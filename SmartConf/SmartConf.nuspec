@@ -4,7 +4,7 @@
     <id>smartconf</id>
     <authors>Dan Nemec</authors>
     <owners>Dan Nemec</owners>
-    <version>1.0.1.3</version>
+    <version>1.0.2.0</version>
     <licenseUrl>http://www.opensource.org/licenses/mit-license.php</licenseUrl>
     <projectUrl>https://github.com/nemec/smartconf</projectUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
