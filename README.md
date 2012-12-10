@@ -44,6 +44,7 @@ Features
 
 Existing Sources
 ================
+Check out the [wiki](https://github.com/nemec/smartconf/wiki/Existing-Sources) for a list.
 
 Usage
 =====
