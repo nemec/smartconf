@@ -18,6 +18,8 @@ namespace SmartConf.Sources
 
         public bool PrimarySource { get; set; }
 
+        public bool Required { get; set; }
+
         private readonly Stream _sourceStream;
 
         /// <summary>

@@ -16,7 +16,15 @@ namespace SmartConf
         bool PrimarySource { get; set; }
 
         /// <summary>
+        /// Indicate that this source is required to run.
+        /// If not required and loading the config object fails,
+        /// the source will be skipped.
+        /// </summary>
+        bool Required { get; set; }
+
+        /// <summary>
         /// Configuration object generated for this source.
+        /// Should be null if loading the config object fails.
         /// </summary>
         T Config { get; }
 

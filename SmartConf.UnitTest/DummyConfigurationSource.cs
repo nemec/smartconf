@@ -6,6 +6,8 @@ namespace SmartConf.UnitTest
     {
         public bool PrimarySource { get; set; }
 
+        public bool Required { get; set; }
+
         public bool PersistentSource { get; set; }
 
         public DummyConfigurationSource(T config)

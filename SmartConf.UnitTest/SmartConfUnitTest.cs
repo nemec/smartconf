@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace SmartConf.UnitTest
@@ -130,6 +131,34 @@ namespace SmartConf.UnitTest
 
             // Assert
             Assert.IsTrue(new ConfigComparer().Equals(expected, actual));
+        }
+
+        [TestMethod]
+        public void LoadSources_WithNullConfigAndConfigNotRequired_IgnoresConfigAndReturnsDefaultConfig()
+        {
+            // Arrange
+            var configManager = new ConfigurationManager<Config>(
+                new DummyConfigurationSource<Config>(null));
+            var expected = new Config();
+
+            // Act
+            var actual = configManager.Out;
+
+            // Assert
+            Assert.IsTrue(new ConfigComparer().Equals(expected, actual));
+        }
+
+        [TestMethod]
+        [ExpectedException(typeof(InvalidDataException))]
+        public void LoadSources_WithNullConfigFileAndConfigRequired_ThrowsException()
+        {
+// ReSharper disable ObjectCreationAsStatement
+            new ConfigurationManager<Config>(
+                new DummyConfigurationSource<Config>(null)
+                    {
+                        Required = true
+                    });
+// ReSharper restore ObjectCreationAsStatement
         }
 
         [TestMethod]

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using SmartConf.Sources;
@@ -68,7 +69,6 @@ namespace SmartConf
         /// <param name="sources"></param>
         public ConfigurationManager(params IConfigurationSource<T>[] sources)
         {
-            ConfigStack = sources;
             var primarySources = sources.Where(s => s.PrimarySource);
             if (primarySources.Count() > 1)
             {
@@ -77,7 +77,33 @@ namespace SmartConf
             _primarySource = primarySources.Any() ?
                 primarySources.First() :
                 sources.Last();
-            Out = sources.Select(s => s.Config).Merge();
+
+            var workingSources = new List<IConfigurationSource<T>>();
+            Out = new T();
+            foreach (var source in sources)
+            {
+                try
+                {
+                    var config = source.Config;
+                    if (config == null && source.Required)
+                    {
+                        throw new InvalidDataException(String.Format(
+                            "Required source {0} failed to create a config file.", source));
+                    }
+                    Out.MergeWith(source.Config);
+                    workingSources.Add(source);
+                }
+                catch (Exception e)
+                {
+                    if (source.Required)
+                    {
+                        throw new InvalidDataException(String.Format(
+                            "Required source {0} failed to create a config file.", source), e);
+                    }
+                }
+            }
+            ConfigStack = workingSources.ToArray();
+
             EnableChangeTracking();
         }
 
