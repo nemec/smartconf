@@ -63,12 +63,12 @@ namespace SmartConf
 
             foreach (var pi in typeof(T).GetProperties())
             {
-                var secValue = pi.GetGetMethod().Invoke(secondary, null);
-                var defaultValue = pi.GetGetMethod().Invoke(defaultObject, null);
+                var secValue = pi.GetValue(secondary, null);
+                var defaultValue = pi.GetValue(defaultObject, null);
 
                 if (!Equals(secValue, defaultValue))
                 {
-                    pi.GetSetMethod().Invoke(primary, new[] { secValue });
+                    pi.SetValue(primary, secValue, null);
                 }
             }
         }
