@@ -23,6 +23,14 @@ namespace SmartConf
         bool Required { get; set; }
 
         /// <summary>
+        /// Indicate that a source is read only. Attempts to
+        /// <see cref="Save"/> or <see cref="PartialSave"/>
+        /// this source should throw an
+        /// <see cref="InvalidOperationException"/>.
+        /// </summary>
+        bool ReadOnly { get; }
+
+        /// <summary>
         /// Configuration object generated for this source.
         /// Should be null if loading the config object fails.
         /// </summary>

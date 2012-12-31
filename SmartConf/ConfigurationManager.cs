@@ -152,7 +152,6 @@ namespace SmartConf
                 GetProperties(PropertyStatus.Changed).Select(p => p.Name));
         }
 
-
         /// <summary>
         /// Retrieves the names of all properties that
         /// have been changed since loading.

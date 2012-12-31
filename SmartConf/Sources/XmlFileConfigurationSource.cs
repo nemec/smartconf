@@ -13,6 +13,11 @@ namespace SmartConf.Sources
         private string Filename { get; set; }
 
         /// <summary>
+        /// This configuration source can be saved.
+        /// </summary>
+        public override bool ReadOnly { get { return false; } }
+
+        /// <summary>
         /// Load the configuration object from a file.
         /// Filename is generated from some other source,
         /// such as another IConfigurationSource.

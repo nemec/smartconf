@@ -20,6 +20,8 @@ namespace SmartConf.Sources
 
         public bool Required { get; set; }
 
+        public virtual bool ReadOnly { get { return true; } }
+
         private readonly Stream _sourceStream;
 
         /// <summary>

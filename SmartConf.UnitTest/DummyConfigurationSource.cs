@@ -6,6 +6,8 @@ namespace SmartConf.UnitTest
     {
         public bool PrimarySource { get; set; }
 
+        public bool ReadOnly { get { return false; } }
+
         public bool Required { get; set; }
 
         public bool PersistentSource { get; set; }
