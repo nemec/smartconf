@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using SmartConf.Sources;
+using SmartConf.Validation;
 
 namespace SmartConf
 {
@@ -24,22 +25,12 @@ namespace SmartConf
 
         private readonly IConfigurationSource<T> _primarySource;
 
-        private T Base
-        {
-            get
-            {
-                return ConfigStack
-                .Select(c => c.Config)
-                .Where(c => !ReferenceEquals(c, _primarySource.Config)).Merge();
-            }
-        }
-
         /// <summary>
         /// This object contains the merged configuration settings.
         /// It will track all changes and save them out to a file
         /// when <see ref="SaveChanges"/> is called.
         /// </summary>
-        public T Out { get; set; }
+        public T Out { get; private set; }
 
         /// <summary>
         /// Create a ConfigurationManager loading its information
@@ -54,7 +45,7 @@ namespace SmartConf
                 (IConfigurationSource<T>)new XmlFileConfigurationSource<T>(c))
                 .ToArray())
         {
-        } 
+        }
 
         /// <summary>
         /// Create a ConfigurationManager, loading its information
@@ -68,6 +59,26 @@ namespace SmartConf
         /// </exception>
         /// <param name="sources"></param>
         public ConfigurationManager(params IConfigurationSource<T>[] sources)
+            : this(null, sources)
+        {
+        }
+
+        /// <summary>
+        /// Create a ConfigurationManager, loading its information
+        /// from an ordered list of sources.
+        /// 
+        /// If no source is marked as a PrimarySource, the last
+        /// source in the sequence will be assumed to be primary.
+        /// </summary>
+        /// <exception cref="ArgumentException">
+        /// More than one source is marked as a PrimarySource.
+        /// </exception>
+        /// <param name="validator">
+        /// Validates each source's output. If null,
+        /// validation is not performed.
+        /// </param>
+        /// <param name="sources"></param>
+        public ConfigurationManager(IValidator<T> validator, params IConfigurationSource<T>[] sources)
         {
             var primarySources = sources.Where(s => s.PrimarySource);
             if (primarySources.Count() > 1)
@@ -82,29 +93,50 @@ namespace SmartConf
             Out = new T();
             foreach (var source in sources)
             {
+                T config = null;
+
+                // ReSharper disable EmptyGeneralCatchClause
                 try
                 {
-                    var config = source.Config;
-                    if (config == null && source.Required)
-                    {
-                        throw new InvalidDataException(String.Format(
-                            "Required source {0} failed to create a config file.", source));
-                    }
-                    Out.MergeWith(source.Config);
-                    workingSources.Add(source);
+                    config = source.Config;
                 }
-                catch (Exception e)
+                catch (Exception)
                 {
-                    if (source.Required)
-                    {
-                        throw new InvalidDataException(String.Format(
-                            "Required source {0} failed to create a config file.", source), e);
-                    }
+                    // Ignore errors if source is not required...
                 }
+                // ReSharper restore EmptyGeneralCatchClause
+
+                if (config == null && source.Required)
+                {
+                    throw new InvalidDataException(String.Format(
+                        "Required source {0} failed to create a config file.", source));
+                }
+                
+                Out.MergeWith(config);
+                workingSources.Add(source);
             }
+
+            if (validator != null)
+            {
+                validator.Validate(Out);
+            }
+
             ConfigStack = workingSources.ToArray();
 
             EnableChangeTracking();
+        }
+
+        /// <summary>
+        /// Return a configuration object composed of
+        /// all sources except the primary source
+        /// merged into one.
+        /// </summary>
+        /// <returns></returns>
+        private T CreateBaseConfig()
+        {
+            return ConfigStack
+                .Select(c => c.Config)
+                .Where(c => !ReferenceEquals(c, _primarySource.Config)).Merge();
         }
 
         /// <summary>
@@ -145,11 +177,12 @@ namespace SmartConf
         /// <param name="source">Source to use as the primary source.</param>
         public void SaveChanges(IConfigurationSource<T> source)
         {
+            var @base = CreateBaseConfig();
             var mrg = new T();
             mrg.MergeWith(_primarySource.Config);
-            mrg.MergeWith(Out, Base);
+            mrg.MergeWith(Out, @base);
             source.PartialSave(mrg,
-                GetProperties(PropertyStatus.Changed).Select(p => p.Name));
+                GetProperties(@base, Out, PropertyStatus.Changed).Select(p => p.Name));
         }
 
         /// <summary>
@@ -159,11 +192,12 @@ namespace SmartConf
         /// <returns></returns>
         public Dictionary<string, object> GetPropertyChangesByName()
         {
-            var primaryChanges = GetProperties(Base, _primarySource.Config, PropertyStatus.Changed)
+            var @base = CreateBaseConfig();
+            var primaryChanges = GetProperties(@base, _primarySource.Config, PropertyStatus.Changed)
                 .ToDictionary(
                     k => k.Name,
                     v => v.GetGetMethod().Invoke(_primarySource.Config, null));
-            var outChanges = GetProperties(Base, Out, PropertyStatus.Changed)
+            var outChanges = GetProperties(@base, Out, PropertyStatus.Changed)
                 .ToDictionary(
                     k => k.Name,
                     v => v.GetGetMethod().Invoke(Out, null));
@@ -183,15 +217,6 @@ namespace SmartConf
             Changed,
             Unchanged
         }
-
-        private IEnumerable<PropertyInfo> GetProperties(PropertyStatus status)
-        {
-            return GetProperties(
-                ConfigStack
-                    .Select(c => c.Config)
-                    .Where(c => !ReferenceEquals(c, _primarySource.Config)).Merge(),
-                Out, status);
-        } 
 
         private static IEnumerable<PropertyInfo> GetProperties(T start, T end, PropertyStatus status)
         {

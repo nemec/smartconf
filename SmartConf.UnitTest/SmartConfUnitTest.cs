@@ -1,48 +1,14 @@
 ﻿using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using SmartConf.UnitTest.Mocks;
+using SmartConf.Validation;
 
 namespace SmartConf.UnitTest
 {
     [TestClass]
     public class SmartConfUnitTest
     {
-        [DebuggerDisplay("Name: {Name}, Age: {Age}, Occupation: {Occupation}")]
-        public class Config
-        {
-            public string Name { get; set; }
-            public int Age { get; set; }
-            public string Occupation { get; set; }
-            
-            public Config()
-            {
-                Occupation = "Unemployed";
-            }
-        }
-
-        private class ConfigComparer : IEqualityComparer<Config>
-        {
-
-            public bool Equals(Config x, Config y)
-            {
-                if (x == null || y == null)
-                {
-                    return x != y;
-                }
-
-                return x.Age == y.Age &&
-                    x.Name == y.Name &&
-                    x.Occupation == y.Occupation;
-            }
-
-            public int GetHashCode(Config obj)
-            {
-                return 3*(obj.Name != null ? obj.Name.GetHashCode() : 0) +
-                       5*(obj.Age.GetHashCode());
-            }
-        }
-            
         [TestMethod]
         public void LoadSources_WithSingleSource_EqualsSourceObject()
         {
@@ -246,35 +212,99 @@ namespace SmartConf.UnitTest
         public void SaveChanges_WherePrimarySourceIsNotLast_MergesPrimarySourceIntoOutput()
         {
             // Arrange
-            var primary = new Demo
+            var primary = new Config
                 {
                     Age = 20,
                     Name = "Timothy"
                 };
-            var secondary = new Demo
+            var secondary = new Config
                 {
                     Name = "Fred"
                 };
-            var expected = new Demo
+            var expected = new Config
                 {
                     Age = 88,
                     Name = "Timothy"
                 };
 
-            var primarySource = new DummyConfigurationSource<Demo>(primary)
+            var primarySource = new DummyConfigurationSource<Config>(primary)
                 {
                     PrimarySource = true
                 };
 
             // Act
-            var newConf = new ConfigurationManager<Demo>(
+            var newConf = new ConfigurationManager<Config>(
                 primarySource,
-                new DummyConfigurationSource<Demo>(secondary));
+                new DummyConfigurationSource<Config>(secondary));
             newConf.Out.Age = 88;
             newConf.SaveChanges();
 
             // Assert
-            Assert.AreEqual(expected, primarySource.SavedObject);
+            Assert.IsTrue(new ConfigComparer().Equals(expected, primarySource.SavedObject));
+        }
+
+        [TestMethod]
+        public void Validation_WhereValidationIsPassing_DoesNotThrowException()
+        {
+            // Arrange
+            var primary = new Config
+            {
+                Age = 20,
+                Name = "Timothy"
+            };
+
+            var primarySource = new DummyConfigurationSource<Config>(primary);
+
+            // Act
+// ReSharper disable ObjectCreationAsStatement
+            new ConfigurationManager<Config>(
+                new ConfigValidator(), primarySource);
+// ReSharper restore ObjectCreationAsStatement
+        }
+
+        [TestMethod]
+        [ExpectedException(typeof(ValidationException))]
+        public void Validation_WhereValidationIsFailingThrowsException()
+        {
+            // Arrange
+            var primary = new Config
+            {
+                Age = 12,
+                Name = "Timothy"
+            };
+
+            var primarySource = new DummyConfigurationSource<Config>(primary);
+
+            // Act
+            // ReSharper disable ObjectCreationAsStatement
+            new ConfigurationManager<Config>(
+                new ConfigValidator(), primarySource);
+            // ReSharper restore ObjectCreationAsStatement
+        }
+
+        [TestMethod]
+        public void Validation_WithMultipleSourcesWhereValidationIsFailingInFirstButOverriden_DoesNotThrowException()
+        {
+            // Arrange
+            var primary = new Config
+            {
+                Age = 12,
+                Name = "Timothy"
+            };
+
+            var secondary = new Config
+            {
+                Age = 20,
+            };
+
+            var primarySource = new DummyConfigurationSource<Config>(primary);
+            var secondarySource = new DummyConfigurationSource<Config>(secondary);
+
+            // Act
+            // ReSharper disable ObjectCreationAsStatement
+            new ConfigurationManager<Config>(
+                new ConfigValidator(), primarySource, secondarySource);
+            // ReSharper restore ObjectCreationAsStatement
         }
     }
 }

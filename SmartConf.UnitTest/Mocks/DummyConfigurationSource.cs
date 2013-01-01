@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 
-namespace SmartConf.UnitTest
+namespace SmartConf.UnitTest.Mocks
 {
     public class DummyConfigurationSource<T> : IConfigurationSource<T> where T : class
     {
