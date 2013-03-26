@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Reflection;
 using SmartConf.Sources;
 using SmartConf.Validation;
@@ -24,6 +25,10 @@ namespace SmartConf
         private IConfigurationSource<T>[] ConfigStack { get; set; }
 
         private readonly IConfigurationSource<T> _primarySource;
+
+        private readonly HashSet<string> _propertiesAlwaysSerialized;
+
+        private readonly HashSet<string> _propertiesNeverSerialized;
 
         /// <summary>
         /// This object contains the merged configuration settings.
@@ -80,6 +85,9 @@ namespace SmartConf
         /// <param name="sources"></param>
         public ConfigurationManager(IValidator<T> validator, params IConfigurationSource<T>[] sources)
         {
+            _propertiesAlwaysSerialized = new HashSet<string>();
+            _propertiesNeverSerialized = new HashSet<string>();
+
             var primarySources = sources.Where(s => s.PrimarySource);
             if (primarySources.Count() > 1)
             {
@@ -124,6 +132,38 @@ namespace SmartConf
             ConfigStack = workingSources.ToArray();
 
             EnableChangeTracking();
+        }
+
+        /// <summary>
+        /// Tell the configuration manager to always serialize this property.
+        /// If the property is currently marked as "never serialize", that
+        /// status will be removed.
+        /// </summary>
+        /// <typeparam name="TProp"></typeparam>
+        /// <param name="prop"></param>
+        /// <returns></returns>
+        public ConfigurationManager<T> AlwaysSerialize<TProp>(Expression<Func<T, TProp>> prop)
+        {
+            var name = ((MemberExpression) prop.Body).Member.Name;
+            _propertiesAlwaysSerialized.Add(name);
+            _propertiesNeverSerialized.Remove(name);
+            return this;
+        }
+
+        /// <summary>
+        /// Tell the configuration manager to never serialize this property.
+        /// If the property is currently marked as "always serialize", that
+        /// status will be removed.
+        /// </summary>
+        /// <typeparam name="TProp"></typeparam>
+        /// <param name="prop"></param>
+        /// <returns></returns>
+        public ConfigurationManager<T> NeverSerialize<TProp>(Expression<Func<T, TProp>> prop)
+        {
+            var name = ((MemberExpression)prop.Body).Member.Name;
+            _propertiesNeverSerialized.Add(name);
+            _propertiesAlwaysSerialized.Remove(name);
+            return this;
         }
 
         /// <summary>
@@ -180,9 +220,20 @@ namespace SmartConf
             var @base = CreateBaseConfig();
             var mrg = new T();
             mrg.MergeWith(_primarySource.Config);
-            mrg.MergeWith(Out, @base);
+            mrg.MergeWith(Out, defaultObject: @base);
+
+            // Copy over the values for all "always serialized" properties
+            foreach (var prop in _propertiesAlwaysSerialized
+                .Select(propName => typeof (T).GetProperty(propName)))
+            {
+                prop.SetValue(mrg, prop.GetValue(Out, null), null);
+            }
+
             source.PartialSave(mrg,
-                GetProperties(@base, Out, PropertyStatus.Changed).Select(p => p.Name));
+                GetProperties(@base, _primarySource.Config, PropertyStatus.Changed)
+                    .Select(p => p.Name)
+                    .Concat(_propertiesAlwaysSerialized)
+                    .Except(_propertiesNeverSerialized));
         }
 
         /// <summary>

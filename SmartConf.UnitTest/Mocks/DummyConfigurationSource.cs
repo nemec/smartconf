@@ -1,8 +1,9 @@
 ﻿using System.Collections.Generic;
+using System.Linq;
 
 namespace SmartConf.UnitTest.Mocks
 {
-    public class DummyConfigurationSource<T> : IConfigurationSource<T> where T : class
+    public class DummyConfigurationSource<T> : IConfigurationSource<T> where T : class, new()
     {
         public bool PrimarySource { get; set; }
 
@@ -36,7 +37,13 @@ namespace SmartConf.UnitTest.Mocks
 
         public void PartialSave(T obj, IEnumerable<string> propertyNames)
         {
-            SavedObject = obj;
+            var mrg = new T();
+            foreach (var prop in propertyNames
+                .Select(propertyName => typeof (T).GetProperty(propertyName)))
+            {
+                prop.SetValue(mrg, prop.GetValue(obj, null), null);
+            }
+            SavedObject = mrg;
         }
     }
 }

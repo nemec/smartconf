@@ -53,7 +53,17 @@ Features
 * Since configuration objects are plain objects, you can define instance
     methods, custom getters/setters, and more.
 * Validation can be performed on the final configuration object to ensure that
-  all of its values are valid.
+    all of its values are valid.
+* The configuration manager can mark a property that should be always
+    serialized or never serialized (`ConfigManager.AlwaysSerialize` and
+    `ConfigManager.NeverSerialize` respectively). A property marked as
+    `AlwaysSerialize` will be serialized regardless of whether or not it
+    changed. A property marked as `NeverSerialize` will never be serialized,
+    even if it's changed. The latter is useful for properties like passwords. 
+    The password may be stored in a protected configuration file that's only 
+    visible to the ConfigurationManager, but the source where changed 
+    properties are written may be world-readable. This way, changes to the
+    password within the application are not persisted.
 
 Existing Sources
 ================

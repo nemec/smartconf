@@ -191,9 +191,10 @@ namespace SmartConf.UnitTest
                 {
                     PrimarySource = true
                 },
-                new DummyConfigurationSource<Config>(source3));
-
-            configManager.Out.Occupation = "Cool";
+                new DummyConfigurationSource<Config>(source3))
+                {
+                    Out = {Occupation = "Cool"}
+                };
 
             var expected = new Dictionary<string, object>
                 {
@@ -235,8 +236,10 @@ namespace SmartConf.UnitTest
             // Act
             var newConf = new ConfigurationManager<Config>(
                 primarySource,
-                new DummyConfigurationSource<Config>(secondary));
-            newConf.Out.Age = 88;
+                new DummyConfigurationSource<Config>(secondary))
+                {
+                    Out = {Age = 88}
+                };
             newConf.SaveChanges();
 
             // Assert
@@ -305,6 +308,58 @@ namespace SmartConf.UnitTest
             new ConfigurationManager<Config>(
                 new ConfigValidator(), primarySource, secondarySource);
             // ReSharper restore ObjectCreationAsStatement
+        }
+
+        [TestMethod]
+        public void AlwaysSerialize_WithUnchangedProperty_SerializesPropertyAnyway()
+        {
+            // Arrange
+            var secondary = new Config
+                {
+                    Age = 12,
+                    Name = "Timothy"
+                };
+
+            var primary = new Config();
+
+            var expected = new Config
+                {
+                    Name = "Timothy"
+                };
+
+            var configManager = new ConfigurationManager<Config>(
+                new DummyConfigurationSource<Config>(secondary),
+                new DummyConfigurationSource<Config>(primary));
+
+            configManager.AlwaysSerialize(t => t.Name);
+
+            var actualManager = new DummyConfigurationSource<Config>(new Config());
+            configManager.SaveChanges(actualManager);
+
+            Assert.IsTrue(new ConfigComparer().Equals(
+                expected, actualManager.SavedObject));
+        }
+
+        [TestMethod]
+        public void NeverSerialize_WithChangedProperty_DoesNotSerializeProperty()
+        {
+            var config = new Config
+                {
+                    Name = "Timothy"
+                };
+
+            var manager = new ConfigurationManager<Config>(
+                new DummyConfigurationSource<Config>(config));
+
+            manager.NeverSerialize(p => p.Occupation);
+
+            manager.Out.Occupation = "Top Secret";
+
+            var actualManager = new DummyConfigurationSource<Config>(new Config());
+            manager.SaveChanges(actualManager);
+
+            Assert.IsTrue(new ConfigComparer().Equals(
+                config, actualManager.SavedObject));
         }
     }
 }

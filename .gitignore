@@ -2,6 +2,8 @@
 bin
 obj
 
+*.psess
+
 # mstest test results
 TestResults
 packages/
