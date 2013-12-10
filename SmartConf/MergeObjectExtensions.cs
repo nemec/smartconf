@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Reflection;
 
 namespace SmartConf
 {
@@ -56,21 +57,41 @@ namespace SmartConf
         /// </param>
         public static void MergeWith<T>(this T primary, T secondary, T defaultObject)
         {
+            MergeUntyped(typeof(T), primary, secondary, defaultObject);
+        }
+
+        private static void MergeUntyped(Type objectType, object primary, object secondary, object defaultObject)
+        {
             // We need to know whether or not the value is new or from the constructor.
             // Doesn't work on objects that don't implement IEquatable.
             if (Equals(secondary, null)) return;
             if (Equals(primary, null)) throw new ArgumentNullException("primary");
 
-            foreach (var pi in typeof(T).GetProperties())
+            foreach (var pi in objectType.GetProperties())
             {
                 var secValue = pi.GetValue(secondary, null);
                 var defaultValue = pi.GetValue(defaultObject, null);
-
-                if (!Equals(secValue, defaultValue))
+                if (IsSimplePropety(pi))
                 {
-                    pi.SetValue(primary, secValue, null);
+                    if (!Equals(secValue, defaultValue))
+                    {
+                        pi.SetValue(primary, secValue, null);
+                    }
+                }
+                else
+                {
+                    MergeUntyped(pi.PropertyType,
+                        pi.GetValue(primary, null),
+                        secValue,
+                        defaultValue ?? Activator.CreateInstance(pi.PropertyType));
                 }
             }
+        }
+
+        private static bool IsSimplePropety(PropertyInfo pi)
+        {
+            var propertyType = pi.PropertyType;
+            return propertyType == typeof(string) || propertyType.IsValueType;
         }
 
         /// <summary>

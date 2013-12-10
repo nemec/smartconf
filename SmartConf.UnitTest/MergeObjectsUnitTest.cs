@@ -40,6 +40,56 @@ namespace SmartConf.UnitTest
         }
     }
 
+    [DebuggerDisplay("Comment: {Comment}, Nested: (Name: {Nested.Name}, Age: {Nested.Age})")]
+    public class NestingDemo
+    {
+        public string Comment { get; set; }
+        public Demo Nested { get; set; }
+
+        public NestingDemo()
+        {
+            Nested = new Demo();
+        }
+
+        public bool Equals(NestingDemo other)
+        {
+            return Comment == other.Comment && Equals(Nested, other.Nested);
+        }
+
+        public override bool Equals(object obj)
+        {
+            if (ReferenceEquals(null, obj)) return false;
+            if (ReferenceEquals(this, obj)) return true;
+            var other = obj as NestingDemo;
+            return other != null && Equals(other);
+        }
+
+        public override int GetHashCode()
+        {
+            unchecked
+            {
+                return ((Comment != null ? Comment.GetHashCode() : 0)*397)
+                       ^ (Nested != null ? Nested.GetHashCode() : 0);
+            }
+        }
+    }
+
+    public class NestingDemoWithNullDefaultNestedSection : NestingDemo
+    {
+        public NestingDemoWithNullDefaultNestedSection()
+        {
+            Nested = null;
+        }
+    }
+
+    public class NestingDemoWithCustomizedDefaultAge : NestingDemo
+    {
+        public NestingDemoWithCustomizedDefaultAge()
+        {
+            Nested.Age = 50;
+        }
+    }
+
     [TestClass]
     public class MergeObjectsUnitTest
     {
@@ -115,6 +165,106 @@ namespace SmartConf.UnitTest
 
             // Assert
             Assert.AreEqual(expected, actual);
+        }
+
+        [TestMethod]
+        public void Merge_WithNestedObject_MergesNestedProperties()
+        {
+            // Arrange
+            var @base = new NestingDemo
+            {
+                Comment = "base comment",
+                Nested = new Demo
+                {
+                    Age = 20,
+                    Name = "Tim"
+                }
+            };
+            var @new = new NestingDemo
+            {
+                Comment = "new comment",
+                Nested = new Demo
+                {
+                    Age = 10
+                }
+            };
+            var expected = new NestingDemo
+            {
+                Comment = "new comment",
+                Nested = new Demo
+                {
+                    Age = 10,
+                    Name = "Tim"
+                }
+            };
+
+            // Act
+            @base.MergeWith(@new);
+
+            // Assert
+            Assert.AreEqual(expected, @base);
+        }
+
+        [TestMethod]
+        public void Merge_WithNestedObjectNullByDefault_MergesNestedProperties()
+        {
+            // Arrange
+            var @base = new NestingDemoWithNullDefaultNestedSection
+            {
+                Nested = new Demo
+                {
+                    Age = 20,
+                    Name = "Tim"
+                }
+            };
+            var @new = new NestingDemoWithNullDefaultNestedSection
+            {
+                Nested = new Demo
+                {
+                    Age = 10
+                }
+            };
+            var expected = new NestingDemoWithNullDefaultNestedSection
+            {
+                Nested = new Demo
+                {
+                    Age = 10,
+                    Name = "Tim"
+                }
+            };
+
+            // Act
+            @base.MergeWith(@new);
+
+            // Assert
+            Assert.AreEqual(expected, @base);
+        }
+
+        [TestMethod]
+        public void Merge_WithNestedObject_TakesParentSpecificDefaultsIntoAccount()
+        {
+            // Arrange
+            var @base = new NestingDemoWithCustomizedDefaultAge
+            {
+                Nested = new Demo
+                {
+                    Age = 0
+                }
+            };
+            var @new = new NestingDemoWithCustomizedDefaultAge{};
+            var expected = new NestingDemoWithCustomizedDefaultAge
+            {
+                Nested = new Demo
+                {
+                    Age = 0,
+                }
+            };
+
+            // Act
+            @base.MergeWith(@new);
+
+            // Assert
+            Assert.AreEqual(expected, @base);
         }
     }
 }
